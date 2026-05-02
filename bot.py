@@ -49,7 +49,7 @@ async def play_tts(voice_channel, text, lang='th'):
             await asyncio.sleep(0.5)
 
         # เล่นเสียง
-        vc.play(discord.FFmpegPCMAudio(filename))
+        vc.play(discord.FFmpegPCMAudio(filename, executable="/usr/bin/ffmpeg"))
 
         # รอให้เสียงเล่นเสร็จ
         while vc.is_playing():
