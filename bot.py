@@ -5,16 +5,13 @@ import random
 import subprocess
 from gtts import gTTS
 
-# ตั้งค่า Intents
 intents = discord.Intents.default()
 intents.voice_states = True
 intents.members = True
 
 client = discord.Client(intents=intents)
 
-# หา path ของ ffmpeg อัตโนมัติ
 def find_ffmpeg():
-    # ลอง imageio-ffmpeg ก่อน
     try:
         import imageio_ffmpeg
         path = imageio_ffmpeg.get_ffmpeg_exe()
@@ -22,14 +19,13 @@ def find_ffmpeg():
         return path
     except Exception:
         pass
-    # ลอง which
     result = subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True)
     if result.stdout.strip():
         return result.stdout.strip()
     return 'ffmpeg'
+
 FFMPEG_PATH = find_ffmpeg()
 
-# ข้อความต้อนรับแบบสุ่ม
 WELCOME_MESSAGES = [
     "{name} เข้ามาแล้ว",
     "ยินดีต้อนรับ {name}",
@@ -38,7 +34,6 @@ WELCOME_MESSAGES = [
     "{name} เข้าร่วมห้องแล้ว",
 ]
 
-# ข้อความตอนออก
 LEAVE_MESSAGES = [
     "{name} ออกไปแล้ว",
     "{name} ลาก่อนนะ",
@@ -46,38 +41,45 @@ LEAVE_MESSAGES = [
 ]
 
 async def play_tts(voice_channel, text, lang='th'):
-    """เชื่อมต่อ voice channel แล้วเล่นเสียง TTS"""
     guild = voice_channel.guild
-    filename = f"tts_{guild.id}.mp3"
+    filename = f"tts_{guild.id}_{random.randint(1000,9999)}.mp3"
 
     try:
-        # สร้างไฟล์เสียง
         tts = gTTS(text=text, lang=lang)
         tts.save(filename)
 
-        # เข้าห้องหรือย้ายไปห้องที่ถูกต้อง
         vc = guild.voice_client
         if vc and vc.is_connected():
             await vc.move_to(voice_channel)
         else:
             vc = await voice_channel.connect()
 
-        # รอให้เสียงก่อนหน้าเล่นเสร็จก่อน
         while vc.is_playing():
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
 
-        # เล่นเสียง
-        vc.play(discord.FFmpegPCMAudio(filename, executable=FFMPEG_PATH))
+        finished = asyncio.Event()
+        loop = asyncio.get_event_loop()
 
-        # รอให้เสียงเล่นเสร็จ
-        while vc.is_playing():
-            await asyncio.sleep(0.5)
+        def after(error):
+            loop.call_soon_threadsafe(finished.set)
 
-        # ออกจาก voice channel
+        vc.play(
+            discord.FFmpegPCMAudio(filename, executable=FFMPEG_PATH, options='-vn'),
+            after=after
+        )
+
+        await asyncio.wait_for(finished.wait(), timeout=30.0)
+        await asyncio.sleep(0.3)
         await vc.disconnect()
 
+    except asyncio.TimeoutError:
+        print("Timeout: เล่นเสียงนานเกินไป")
+        if guild.voice_client:
+            await guild.voice_client.disconnect()
     except Exception as e:
         print(f"เกิดข้อผิดพลาด: {e}")
+        if guild.voice_client:
+            await guild.voice_client.disconnect()
     finally:
         if os.path.exists(filename):
             os.remove(filename)
@@ -92,35 +94,30 @@ async def on_ready():
 
 @client.event
 async def on_voice_state_update(member, before, after):
-    # ข้ามถ้าเป็น Bot
     if member.bot:
         return
 
     name = member.display_name
 
-    # คนเข้า Voice Channel
     if before.channel is None and after.channel is not None:
         text = random.choice(WELCOME_MESSAGES).format(name=name)
         print(f"📢 {text}")
         await play_tts(after.channel, text, lang='th')
 
-    # คนออก Voice Channel
     elif before.channel is not None and after.channel is None:
         if len(before.channel.members) > 0:
             text = random.choice(LEAVE_MESSAGES).format(name=name)
             print(f"👋 {text}")
             await play_tts(before.channel, text, lang='th')
 
-    # คนย้ายห้อง
     elif before.channel != after.channel and before.channel is not None and after.channel is not None:
         text = f"{name} ย้ายมาห้องนี้แล้ว"
         print(f"🔄 {text}")
         await play_tts(after.channel, text, lang='th')
 
 
-# รัน Bot
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if not TOKEN:
-    print("❌ ไม่พบ DISCORD_TOKEN! กรุณาตั้งค่า Environment Variable")
+    print("❌ ไม่พบ DISCORD_TOKEN!")
 else:
     client.run(TOKEN)
