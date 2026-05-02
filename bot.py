@@ -14,25 +14,19 @@ client = discord.Client(intents=intents)
 
 # หา path ของ ffmpeg อัตโนมัติ
 def find_ffmpeg():
-    # ลอง which ก่อน
+    # ลอง imageio-ffmpeg ก่อน
+    try:
+        import imageio_ffmpeg
+        path = imageio_ffmpeg.get_ffmpeg_exe()
+        print(f"ใช้ ffmpeg จาก imageio: {path}")
+        return path
+    except Exception:
+        pass
+    # ลอง which
     result = subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True)
     if result.stdout.strip():
         return result.stdout.strip()
-    # ลอง paths ที่อาจเป็นไปได้
-    paths = [
-        '/usr/bin/ffmpeg',
-        '/usr/local/bin/ffmpeg',
-        '/nix/store/ffmpeg',
-        'ffmpeg',
-    ]
-    for path in paths:
-        try:
-            subprocess.run([path, '-version'], capture_output=True)
-            return path
-        except FileNotFoundError:
-            continue
-    return 'ffmpeg'  # fallback
-
+    return 'ffmpeg'
 FFMPEG_PATH = find_ffmpeg()
 
 # ข้อความต้อนรับแบบสุ่ม
