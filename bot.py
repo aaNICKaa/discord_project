@@ -2,6 +2,7 @@ import discord
 import asyncio
 import os
 import random
+import subprocess
 from gtts import gTTS
 
 # ตั้งค่า Intents
@@ -11,7 +12,30 @@ intents.members = True
 
 client = discord.Client(intents=intents)
 
-# ข้อความต้อนรับแบบสุ่ม (ภาษาไทย)
+# หา path ของ ffmpeg อัตโนมัติ
+def find_ffmpeg():
+    # ลอง which ก่อน
+    result = subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True)
+    if result.stdout.strip():
+        return result.stdout.strip()
+    # ลอง paths ที่อาจเป็นไปได้
+    paths = [
+        '/usr/bin/ffmpeg',
+        '/usr/local/bin/ffmpeg',
+        '/nix/store/ffmpeg',
+        'ffmpeg',
+    ]
+    for path in paths:
+        try:
+            subprocess.run([path, '-version'], capture_output=True)
+            return path
+        except FileNotFoundError:
+            continue
+    return 'ffmpeg'  # fallback
+
+FFMPEG_PATH = find_ffmpeg()
+
+# ข้อความต้อนรับแบบสุ่ม
 WELCOME_MESSAGES = [
     "{name} เข้ามาแล้ว",
     "ยินดีต้อนรับ {name}",
@@ -49,7 +73,7 @@ async def play_tts(voice_channel, text, lang='th'):
             await asyncio.sleep(0.5)
 
         # เล่นเสียง
-        vc.play(discord.FFmpegPCMAudio(filename, executable="/usr/bin/ffmpeg"))
+        vc.play(discord.FFmpegPCMAudio(filename, executable=FFMPEG_PATH))
 
         # รอให้เสียงเล่นเสร็จ
         while vc.is_playing():
@@ -61,13 +85,13 @@ async def play_tts(voice_channel, text, lang='th'):
     except Exception as e:
         print(f"เกิดข้อผิดพลาด: {e}")
     finally:
-        # ลบไฟล์ชั่วคราว
         if os.path.exists(filename):
             os.remove(filename)
 
 
 @client.event
 async def on_ready():
+    print(f"🔍 ffmpeg path: {FFMPEG_PATH}")
     print(f"✅ Bot พร้อมแล้ว: {client.user}")
     print(f"🌐 เชื่อมต่อ {len(client.guilds)} เซิร์ฟเวอร์")
 
@@ -88,7 +112,6 @@ async def on_voice_state_update(member, before, after):
 
     # คนออก Voice Channel
     elif before.channel is not None and after.channel is None:
-        # ประกาศในห้องที่เขาเพิ่งออกไป (ถ้ายังมีคนอยู่)
         if len(before.channel.members) > 0:
             text = random.choice(LEAVE_MESSAGES).format(name=name)
             print(f"👋 {text}")
