@@ -2,4 +2,7 @@
 nixPkgs = ["ffmpeg"]
 
 [phases.install]
-cmds = ["pip install discord.py[voice] gTTS PyNaCl"]
+cmds = ["pip install 'discord.py[voice]>=2.4.0' gTTS PyNaCl"]
+
+[phases.build]
+cmds = []
