@@ -54,6 +54,9 @@ async def play_tts(voice_channel, text, lang='th'):
         else:
             vc = await voice_channel.connect()
 
+        # รอให้ connection เสถียรก่อน
+        await asyncio.sleep(1.5)
+
         while vc.is_playing():
             await asyncio.sleep(0.3)
 
